@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Claude Operator's Course — From Chatting to Running It</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0a0e13;
+    --panel: #10161e;
+    --panel-2: #141b24;
+    --line: rgba(107,197,224,0.14);
+    --line-strong: rgba(107,197,224,0.28);
+    --cyan: #5ec8e0;
+    --cyan-dim: #3a8ea3;
+    --amber: #e8432e;
+    --amber-dim: #7a2a20;
+    --text: #e9edf1;
+    --text-mute: #8b98a5;
+    --text-faint: #56626d;
+    --done: #58d68d;
+    --radius: 2px;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html{scroll-behavior:smooth;}
+  body{
+    background:
+      linear-gradient(var(--line) 1px, transparent 1px) 0 0/40px 40px,
+      linear-gradient(90deg, var(--line) 1px, transparent 1px) 0 0/40px 40px,
+      var(--bg);
+    color:var(--text);
+    font-family:'Inter', sans-serif;
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{ background:var(--amber); color:#0a0e13; }
+  .mono{ font-family:'IBM Plex Mono', monospace; }
+  .disp{ font-family:'Oswald', sans-serif; text-transform:uppercase; letter-spacing:0.02em; }
+
+  a{ color:var(--cyan); }
+
+  /* ---------- Shell layout ---------- */
+  .shell{ display:flex; min-height:100vh; }
+
+  /* ---------- Sidebar ---------- */
+  .sidebar{
+    width:340px; flex-shrink:0;
+    background:linear-gradient(180deg, var(--panel) 0%, #0c1117 100%);
+    border-right:1px solid var(--line-strong);
+    display:flex; flex-direction:column;
+    position:sticky; top:0; height:100vh; overflow-y:auto;
+  }
+  .sidebar::-webkit-scrollbar{ width:6px; }
+  .sidebar::-webkit-scrollbar-thumb{ background:var(--cyan-dim); }
+
+  .brand{
+    padding:26px 24px 18px; border-bottom:1px solid var(--line);
+  }
+  .brand .eyebrow{
+    font-size:11px; letter-spacing:0.18em; color:var(--amber); font-family:'IBM Plex Mono',monospace;
+    display:flex; align-items:center; gap:8px; margin-bottom:8px;
+  }
+  .brand .eyebrow::before{ content:''; width:6px; height:6px; background:var(--amber); border-radius:50%; box-shadow:0 0 8px var(--amber); }
+  .brand h1{
+    font-family:'Oswald',sans-serif; font-size:26px; font-weight:700; text-transform:uppercase;
+    line-height:1.05; letter-spacing:0.01em;
+  }
+  .brand p{ color:var(--text-mute); font-size:13px; margin-top:8px; line-height:1.5; }
+
+  /* Gauge cluster */
+  .gauge-wrap{
+    padding:22px 24px; border-bottom:1px solid var(--line);
+    display:flex; align-items:center; gap:18px;
+  }
+  .gauge{ position:relative; width:104px; height:104px; flex-shrink:0; }
+  .gauge svg{ transform:rotate(-90deg); }
+  .gauge-track{ fill:none; stroke:#1b2530; stroke-width:8; }
+  .gauge-fill{ fill:none; stroke:var(--cyan); stroke-width:8; stroke-linecap:round;
+    transition:stroke-dashoffset .6s cubic-bezier(.65,0,.35,1), stroke .3s; filter:drop-shadow(0 0 5px rgba(94,200,224,.6)); }
+  .gauge-redline{ fill:none; stroke:var(--amber); stroke-width:8; opacity:.55; }
+  .gauge-center{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .gauge-num{ font-family:'IBM Plex Mono',monospace; font-size:22px; font-weight:600; color:var(--text); }
+  .gauge-lbl{ font-size:9px; letter-spacing:.12em; color:var(--text-faint); text-transform:uppercase; margin-top:1px;}
+  .gauge-meta{ font-size:12px; color:var(--text-mute); line-height:1.7; }
+  .gauge-meta b{ color:var(--text); font-family:'IBM Plex Mono',monospace; font-weight:600;}
+
+  /* Lesson list */
+  .lesson-nav{ padding:14px 12px 30px; flex:1; }
+  .nav-section-lbl{
+    font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.16em; color:var(--text-faint);
+    padding:10px 12px 8px; text-transform:uppercase;
+  }
+  .lesson-item{
+    display:flex; align-items:center; gap:12px;
+    padding:10px 12px; border-radius:var(--radius); cursor:pointer;
+    border-left:2px solid transparent;
+    transition:background .15s, border-color .15s;
+  }
+  .lesson-item:hover{ background:rgba(94,200,224,0.06); }
+  .lesson-item.active{ background:rgba(94,200,224,0.1); border-left-color:var(--cyan); }
+  .lesson-num{
+    font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--text-faint);
+    width:24px; flex-shrink:0; text-align:right;
+  }
+  .lesson-item.active .lesson-num{ color:var(--cyan); }
+  .lesson-check{
+    width:16px; height:16px; border:1.5px solid var(--text-faint); border-radius:3px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; transition:all .15s;
+  }
+  .lesson-check.checked{ background:var(--done); border-color:var(--done); }
+  .lesson-check.checked::after{ content:'✓'; font-size:11px; color:#0a0e13; font-weight:700; }
+  .lesson-info{ flex:1; min-width:0; }
+  .lesson-title{ font-size:13.5px; font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .lesson-item.active .lesson-title{ color:var(--cyan); }
+  .lesson-time{ font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--text-faint); }
+
+  /* ---------- Main ---------- */
+  .main{ flex:1; min-width:0; display:flex; flex-direction:column; }
+  .topbar{
+    position:sticky; top:0; z-index:5;
+    background:rgba(10,14,19,0.88); backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--line-strong);
+    padding:16px 44px; display:flex; align-items:center; justify-content:space-between; gap:20px;
+  }
+  .topbar .path{ font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--text-mute); }
+  .topbar .path b{ color:var(--cyan); }
+  .topbar .actions{ display:flex; gap:10px; }
+  .btn{
+    font-family:'IBM Plex Mono',monospace; font-size:12px; padding:8px 16px; border-radius:2px;
+    border:1px solid var(--line-strong); background:transparent; color:var(--text-mute); cursor:pointer;
+    transition:all .15s; letter-spacing:.02em; white-space:nowrap;
+  }
+  .btn:hover{ border-color:var(--cyan); color:var(--cyan); }
+  .btn.primary{ background:var(--cyan); border-color:var(--cyan); color:#06131a; font-weight:600; }
+  .btn.primary:hover{ background:#7ad4e8; color:#06131a; }
+  .btn.done-state{ background:var(--done); border-color:var(--done); color:#06131a; }
+
+  .content{ flex:1; padding:48px 44px 100px; max-width:900px; }
+
+  .lesson-header{ margin-bottom:34px; }
+  .lesson-header .tag{
+    font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--amber); letter-spacing:.14em;
+    display:flex; align-items:center; gap:10px; margin-bottom:14px;
+  }
+  .lesson-header .tag .num{ font-size:34px; color:var(--line-strong); font-weight:600; line-height:1; }
+  .lesson-header h2{
+    font-family:'Oswald',sans-serif; font-size:40px; font-weight:700; text-transform:uppercase; line-height:1.05;
+  }
+  .lesson-header .sub{ color:var(--text-mute); font-size:16px; margin-top:10px; max-width:640px; line-height:1.5;}
+  .lesson-header .meta-row{ display:flex; gap:22px; margin-top:18px; }
+  .meta-chip{ font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--text-mute); display:flex; align-items:center; gap:6px;}
+  .meta-chip .dot{ width:5px; height:5px; background:var(--cyan); border-radius:50%; }
+
+  .block{ margin-bottom:30px; }
+  .block h3{
+    font-family:'Oswald',sans-serif; font-size:15px; text-transform:uppercase; letter-spacing:.08em;
+    color:var(--cyan); margin-bottom:14px; display:flex; align-items:center; gap:10px;
+  }
+  .block h3::after{ content:''; flex:1; height:1px; background:var(--line-strong); }
+  .block p{ font-size:15px; line-height:1.75; color:#c9d1d9; margin-bottom:12px; }
+  .block ul{ list-style:none; }
+  .block ul li{
+    font-size:14.5px; line-height:1.7; color:#c9d1d9; padding:8px 0 8px 22px; position:relative;
+    border-bottom:1px solid var(--line);
+  }
+  .block ul li:last-child{ border-bottom:none; }
+  .block ul li::before{ content:'—'; position:absolute; left:0; color:var(--cyan-dim); }
+  .block ul li b{ color:var(--text); font-weight:600; }
+
+  .spec-grid{ display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--line-strong); border:1px solid var(--line-strong); margin-bottom:12px; }
+  .spec-cell{ background:var(--panel-2); padding:14px 16px; }
+  .spec-cell .k{ font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--text-faint); letter-spacing:.1em; text-transform:uppercase; margin-bottom:5px;}
+  .spec-cell .v{ font-size:13.5px; color:var(--text); line-height:1.5; }
+
+  .try-panel{
+    background:var(--panel-2); border:1px solid var(--line-strong); border-left:3px solid var(--amber);
+    padding:20px 22px; margin-bottom:12px;
+  }
+  .try-panel .lbl{ font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--amber); letter-spacing:.12em; margin-bottom:10px; text-transform:uppercase;}
+  .try-panel .prompt{
+    font-family:'IBM Plex Mono',monospace; font-size:13px; color:#d7dde3; background:#0a0e13;
+    padding:14px 16px; border:1px solid var(--line); line-height:1.6; white-space:pre-wrap;
+  }
+
+  .callout{
+    background:rgba(94,200,224,0.06); border:1px solid var(--line-strong);
+    padding:16px 20px; font-size:13.5px; color:#c9d1d9; line-height:1.65; margin-bottom:12px;
+  }
+  .callout .lbl{ font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--cyan); letter-spacing:.12em; margin-bottom:6px; text-transform:uppercase; }
+  .callout a{ text-decoration:underline; }
+
+  .quiz{ background:var(--panel-2); border:1px solid var(--line-strong); padding:22px; }
+  .quiz .q{ font-size:14.5px; font-weight:600; margin-bottom:14px; color:var(--text); }
+  .quiz .opts{ display:flex; flex-direction:column; gap:8px; }
+  .quiz-opt{
+    text-align:left; background:#0a0e13; border:1px solid var(--line-strong); color:#c9d1d9;
+    padding:11px 14px; font-size:13.5px; cursor:pointer; font-family:'Inter',sans-serif; border-radius:2px;
+    transition:all .15s;
+  }
+  .quiz-opt:hover{ border-color:var(--cyan); }
+  .quiz-opt.correct{ border-color:var(--done); background:rgba(88,214,141,0.1); color:var(--done); }
+  .quiz-opt.wrong{ border-color:var(--amber); background:rgba(232,67,46,0.1); color:#ff8a7a; }
+  .quiz-feedback{ margin-top:12px; font-size:13px; color:var(--text-mute); display:none; line-height:1.6; }
+
+  .footer-nav{
+    display:flex; justify-content:space-between; align-items:center; margin-top:40px;
+    padding-top:24px; border-top:1px solid var(--line-strong);
+  }
+  .footer-nav .side{ display:flex; flex-direction:column; gap:4px; }
+  .footer-nav .side.right{ align-items:flex-end; text-align:right; }
+  .footer-nav .lbl{ font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--text-faint); letter-spacing:.1em; text-transform:uppercase;}
+  .footer-nav .name{ font-size:14px; font-weight:600; color:var(--text); cursor:pointer; }
+  .footer-nav .name:hover{ color:var(--cyan); }
+
+  .intro-screen{ max-width:900px; }
+  .intro-hero{
+    border:1px solid var(--line-strong); background:var(--panel-2); padding:44px; margin-bottom:34px; position:relative; overflow:hidden;
+  }
+  .intro-hero::before{
+    content:''; position:absolute; top:-40%; right:-10%; width:420px; height:420px; border-radius:50%;
+    background:radial-gradient(circle, rgba(94,200,224,0.12) 0%, transparent 70%);
+  }
+  .intro-hero .eyebrow{ font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--amber); letter-spacing:.16em; margin-bottom:14px;}
+  .intro-hero h2{ font-family:'Oswald',sans-serif; font-size:46px; text-transform:uppercase; line-height:1.02; margin-bottom:16px; }
+  .intro-hero p{ font-size:16px; color:var(--text-mute); line-height:1.7; max-width:600px; margin-bottom:26px; }
+
+  .stat-strip{ display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--line-strong); border:1px solid var(--line-strong); margin-bottom:34px; }
+  .stat{ background:var(--panel-2); padding:20px; }
+  .stat .n{ font-family:'IBM Plex Mono',monospace; font-size:28px; color:var(--cyan); font-weight:600; }
+  .stat .l{ font-size:11px; color:var(--text-faint); text-transform:uppercase; letter-spacing:.08em; margin-top:4px; }
+
+  .track-list{ display:flex; flex-direction:column; gap:1px; background:var(--line-strong); border:1px solid var(--line-strong); }
+  .track-row{ background:var(--panel-2); padding:16px 20px; display:flex; align-items:center; gap:18px; cursor:pointer; transition:background .15s; }
+  .track-row:hover{ background:#182028; }
+  .track-row .tn{ font-family:'IBM Plex Mono',monospace; color:var(--text-faint); font-size:13px; width:24px; }
+  .track-row .tt{ flex:1; font-size:14.5px; font-weight:600; }
+  .track-row .td{ font-size:13px; color:var(--text-mute); flex:2; }
+  .track-row .tm{ font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--text-faint); }
+
+  @media (max-width:900px){
+    .shell{ flex-direction:column; }
+    .sidebar{ width:100%; height:auto; position:relative; }
+    .content{ padding:32px 20px 80px; }
+    .topbar{ padding:14px 20px; }
+    .lesson-header h2{ font-size:30px; }
+    .intro-hero h2{ font-size:32px; }
+    .spec-grid, .stat-strip{ grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="eyebrow">TRANSMISSION // ANTHROPIC</div>
+      <h1>The Claude<br>Operator's Course</h1>
+      <p>Go from chatting with AI — to running it. 15 lessons, ~3h 10m total.</p>
+    </div>
+
+    <div class="gauge-wrap">
+      <div class="gauge">
+        <svg width="104" height="104" viewBox="0 0 104 104">
+          <circle class="gauge-track" cx="52" cy="52" r="44" stroke-dasharray="207 276"/>
+          <circle class="gauge-redline" cx="52" cy="52" r="44" stroke-dasharray="18 265" stroke-dashoffset="-189"/>
+          <circle id="gaugeFill" class="gauge-fill" cx="52" cy="52" r="44" stroke-dasharray="0 276"/>
+        </svg>
+        <div class="gauge-center">
+          <div class="gauge-num" id="gaugeNum">0%</div>
+          <div class="gauge-lbl">complete</div>
+        </div>
+      </div>
+      <div class="gauge-meta">
+        Lessons done<br><b id="doneCount">0</b> / 15<br>
+        <span style="color:var(--text-faint)">Time logged</span><br><b id="timeCount">0</b> min
+      </div>
+    </div>
+
+    <nav class="lesson-nav" id="lessonNav">
+      <div class="nav-section-lbl">Course Map</div>
+      <!-- injected -->
+    </nav>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="main">
+    <div class="topbar">
+      <div class="path">MODULE // <b id="topPath">00 · Start</b></div>
+      <div class="actions">
+        <button class="btn" onclick="goIntro()">Course overview</button>
+        <button class="btn primary" id="markBtn" onclick="toggleComplete()">Mark lesson complete</button>
+      </div>
+    </div>
+    <div class="content" id="content">
+      <!-- injected -->
+    </div>
+  </main>
+
+</div>
+
+<script>
+/* =========================================================
+   DATA — 15 lessons
+   ========================================================= */
+const LESSONS = [
+{
+  title:"Meet Claude", time:10, tag:"FUNDAMENTALS",
+  sub:"What Claude actually is, which model to reach for, and how a conversation is structured — the baseline every later lesson assumes you have.",
+  meta:["Model family","No prerequisites","Applies to: claude.ai, app, API"],
+  blocks:[
+    {h:"What you're operating", p:"Claude is a family of AI models built by Anthropic that you talk to in plain language and that can read, write, reason over, and act on your behalf. You reach it through claude.ai, the mobile and desktop apps, the Claude API, and agentic tools like Claude Code and Claude Cowork.", list:[
+      "<b>Claude Opus 4.8</b> — the deepest reasoning, best for the hardest, highest-stakes problems.",
+      "<b>Claude Sonnet 5</b> — the balanced default: strong reasoning at everyday speed and cost.",
+      "<b>Claude Haiku 4.5</b> — built for speed and volume, ideal for simple or high-throughput tasks.",
+      "<b>Claude Fable 5</b> — Anthropic's Mythos-tier model with additional safety measures for biology, cybersecurity, and LLM research."
+    ]},
+    {h:"How a conversation works", p:"Every message you send becomes part of a growing context window — Claude re-reads the whole conversation each time it replies, which is why it can follow a thread across many turns but also why very long chats eventually need a fresh start or a Project (Lesson 3)."},
+  ],
+  spec:[["Cost of switching models","Free — pick per conversation, per task"],["Best first habit","State the outcome you want, not just the topic"]],
+  try:"Open a new chat and ask Claude to explain, in two different ways, the same technical concept — once for a five-year-old and once for a peer engineer. Notice how much the framing of your request shapes the output.",
+  callout:"Model names and availability change over time — if you're ever unsure which models you can access, ask Claude directly; it can check current documentation for you.",
+  quiz:{q:"You need to triage 500 support tickets quickly and cheaply. Which model class fits best?", opts:["Opus 4.8, for maximum reasoning depth","Haiku 4.5, built for speed and volume","Fable 5, for extra safety review"], correct:1, fb:"Haiku-class models are built for fast, high-throughput tasks like bulk classification — save the heavier reasoning models for genuinely hard problems."}
+},
+{
+  title:"Prompting for Claude", time:15, tag:"FUNDAMENTALS",
+  sub:"The gap between a mediocre answer and a great one is almost always in the instruction, not the model. This lesson is the highest-leverage 15 minutes in the course.",
+  meta:["Builds on: Lesson 1","Core skill","Applies everywhere"],
+  blocks:[
+    {h:"Five habits that change output quality", list:[
+      "<b>Be explicit about the outcome.</b> \"Improve this\" is weaker than \"Rewrite this for a non-technical executive, under 200 words, ending with a clear recommendation.\"",
+      "<b>Give examples.</b> One good example of the input/output pattern you want does more work than a paragraph of description.",
+      "<b>Ask for step-by-step reasoning</b> on anything with real logic or stakes — it catches errors before they reach the answer.",
+      "<b>Use structure</b> like XML tags (&lt;context&gt;, &lt;task&gt;, &lt;format&gt;) to separate background from instructions on longer, multi-part prompts.",
+      "<b>Specify format up front</b> — length, tone, whether you want a table, bullets, or prose — so you're not rewriting after the fact."
+    ]},
+    {h:"Iterate like an engineer", p:"Treat your first prompt as a draft. If the output misses the mark, tell Claude specifically what was wrong rather than starting over — \"too long\" or \"wrong audience\" is enough for Claude to correct course in the same thread."}
+  ],
+  spec:[["Reference","docs.claude.com — prompt engineering overview"],["Anti-pattern","Vague requests + no examples + no format spec"]],
+  try:"Take a task you've asked Claude to do before with mixed results. Rewrite the request with: (1) the specific outcome, (2) one example, (3) a format spec. Compare the two outputs side by side.",
+  callout:"For anything genuinely complex or with high stakes, explicitly asking Claude to reason step-by-step before answering measurably improves accuracy.",
+  quiz:{q:"Which addition most reliably improves output on a genuinely ambiguous task?", opts:["Making the prompt longer overall","Adding one concrete example of the input/output you want","Asking Claude to be 'more creative'"], correct:1, fb:"A single well-chosen example anchors the pattern far more effectively than extra description or vague adjectives."}
+},
+{
+  title:"Working With Projects", time:10, tag:"WORKSPACE",
+  sub:"Projects give Claude durable context — instructions, files, and knowledge that persist across every conversation inside them, so you stop re-explaining yourself.",
+  meta:["claude.ai feature","Great for: recurring work","Team & solo use"],
+  blocks:[
+    {h:"What a Project actually solves", p:"A single chat forgets everything once you close it. A Project is a standing workspace: you set custom instructions once (your role, your brand voice, your standards) and upload reference files once, and every new conversation inside that Project starts already knowing them."},
+    {h:"Good candidates for a Project", list:[
+      "A recurring role — e.g. drafting client communications in a consistent voice.",
+      "A body of reference material you query repeatedly — policies, specs, a style guide.",
+      "A team standard — shared instructions so everyone's output stays consistent."
+    ]}
+  ],
+  spec:[["Where it lives","claude.ai sidebar → Projects"],["Persists","Instructions + uploaded knowledge, across all chats in the Project"]],
+  try:"Create a Project for one recurring task in your work — set custom instructions describing the audience, tone, and format you always need, then start a fresh chat inside it and see how much less you have to explain.",
+  callout:"Projects are the difference between 'a chatbot that resets' and 'a colleague who already knows the brief.'",
+  quiz:{q:"What's the main advantage of a Project over a single long chat?", opts:["It's faster to respond","Instructions and files persist across every new conversation in it","It uses a more powerful model automatically"], correct:1, fb:"Projects exist specifically so you don't have to re-establish context every time you start a new conversation."}
+},
+{
+  title:"Research & Reasoning Modes", time:15, tag:"WORKSPACE",
+  sub:"Not every question deserves the same amount of thought. This lesson is about picking the right depth — web search, deep research, and extended reasoning — for the task in front of you.",
+  meta:["Builds on: Lesson 2","Controls: effort & depth"],
+  blocks:[
+    {h:"Three depths, three jobs", list:[
+      "<b>Direct answer.</b> Claude answers from what it already knows — fastest, right for stable facts and explanations.",
+      "<b>Web search.</b> Claude searches the live web when the answer depends on current information — prices, news, current role-holders, recent releases.",
+      "<b>Deep research / extended thinking.</b> For open-ended or multi-source questions, Claude can run many searches and reason at length before answering — slower, but built for genuinely hard or broad problems."
+    ]},
+    {h:"Effort control", p:"Claude.ai and Claude Cowork also expose a direct effort control alongside the model selector, letting you choose how much work Claude puts into a single response — useful when you know a task is either trivially easy or unusually hard."}
+  ],
+  spec:[["Rule of thumb","If the answer could have changed since training, or spans many sources, ask for research"],["Cost of over-researching","Slower answers for questions that didn't need it"]],
+  try:"Ask Claude something that requires current information (e.g. \"what happened in [your industry] this week\") and watch it search rather than guess from memory.",
+  callout:"You don't need to say 'please search the web' for most current-events questions — Claude recognizes when a question needs fresh information and searches on its own.",
+  quiz:{q:"A question about a well-established historical fact — which mode is most appropriate?", opts:["Deep research with many searches","A direct answer from what Claude already knows","Maximum effort setting"], correct:1, fb:"Stable, well-known facts don't benefit from research overhead — save deep research for current, contested, or multi-source questions."}
+},
+{
+  title:"Connectors", time:10, tag:"WORKSPACE",
+  sub:"Connectors let Claude read live data from the tools you already use — so answers reflect what's actually in your calendar, inbox, or task tracker, not a guess.",
+  meta:["MCP-based","Read + action tools","Opt-in per tool"],
+  blocks:[
+    {h:"How they work", p:"A connector links Claude to an external app — Google Drive, Slack, a calendar, a project tracker — through the Model Context Protocol (MCP). Once connected, Claude can pull real, current data into its answer instead of relying on what you happen to paste in."},
+    {h:"Two categories worth knowing apart", list:[
+      "<b>Read tools</b> (search a doc, check a calendar) — Claude can generally use these without asking each time.",
+      "<b>Action tools</b> (send an email, create an event, book something) — Claude confirms with you before it acts, since these have real-world side effects."
+    ]}
+  ],
+  spec:[["Where to manage","Settings → Connectors, or the tools menu in a chat"],["Third-party apps","Presented as options — Claude won't pick one for you unprompted"]],
+  try:"If you have a calendar or Drive connected, ask Claude a question that needs it — \"what's on my calendar tomorrow\" or \"find my latest project proposal in Drive\" — instead of describing the information yourself.",
+  callout:"Ask Claude what connectors you currently have available — it can tell you what's connected versus what's just waiting to be turned on.",
+  quiz:{q:"Claude wants to send an email on your behalf through a connector. What should you expect?", opts:["It sends immediately, no confirmation needed","It asks you to confirm first, since sending has a real side effect","It refuses entirely"], correct:1, fb:"Actions that send, modify, or delete something on your behalf get a confirmation step — read-only lookups generally don't need one."}
+},
+{
+  title:"File Creation", time:10, tag:"WORKSPACE",
+  sub:"Claude can produce real, downloadable documents — Word files, spreadsheets with working formulas, slide decks, and PDFs — not just text in a chat bubble.",
+  meta:["Formats: docx, xlsx, pptx, pdf","Downloadable output"],
+  blocks:[
+    {h:"What this replaces", p:"Instead of pasting Claude's output into a document yourself, you can ask directly for the deliverable — a formatted report, a working spreadsheet model, a slide deck — and Claude builds the actual file."},
+    {h:"Where it shines", list:[
+      "<b>Spreadsheets</b> with real formulas and multiple tabs, not just a CSV you'd have to fix.",
+      "<b>Word documents</b> with headings, a table of contents, and consistent formatting.",
+      "<b>Slide decks</b> built section by section, ready to present or hand off.",
+      "<b>PDFs</b> created from scratch or filled in from an existing form."
+    ]}
+  ],
+  spec:[["Trigger phrases","\"save this,\" \"as a Word doc,\" \"make me a spreadsheet\""],["Output","A file you can open, download, or keep editing"]],
+  try:"Ask Claude to turn a plan or list you already have in a chat into an actual spreadsheet file with proper columns — then open it and check the formulas.",
+  callout:"Be specific about the deliverable type up front — \"as a Word document,\" \"as a slide deck\" — so Claude builds the right artifact the first time.",
+  quiz:{q:"You want a quarterly report with a working budget calculation your team can update. What should you ask for?", opts:["A markdown summary in chat","An xlsx file with real formulas","A plain text file"], correct:1, fb:"When numbers need to update or recalculate, an actual spreadsheet with formulas beats static text every time."}
+},
+{
+  title:"Artifacts", time:10, tag:"WORKSPACE",
+  sub:"Artifacts are interactive, standalone outputs — code, documents, mini web apps — that render right in the conversation without you touching a line of code.",
+  meta:["Renders live","Editable & iterable","No coding required"],
+  blocks:[
+    {h:"What qualifies as an Artifact", p:"Anything substantial enough to be its own thing — a working code snippet, an interactive tool, a diagram, a long piece of writing — opens in its own pane next to the chat, so you can view, tweak, and reuse it separately from the conversation."},
+    {h:"Why it matters for non-coders", p:"You can describe a calculator, a tracker, or a small interactive tool in plain English, and Claude builds a working version as an Artifact — you never need to open a code editor."}
+  ],
+  spec:[["Good fits","Code >20 lines, interactive tools, long-form documents"],["Not for","Short answers, quick snippets, single-line replies"]],
+  try:"Describe a small interactive tool you wish existed — a unit converter, a habit tracker, a quiz — and ask Claude to build it. Then ask for one specific change and watch it update in place.",
+  callout:"An Artifact isn't just a fancier reply — it's a separate, reusable object. You can keep refining it across the conversation instead of starting over each time.",
+  quiz:{q:"Which request is the best fit for an Artifact?", opts:["\"What's 15% of 200?\"","\"Build me an interactive expense tracker\"","\"Give me a one-sentence definition of latency\""], correct:1, fb:"Artifacts are for substantial, standalone, often interactive outputs — quick facts and one-liners stay in the chat itself."}
+},
+{
+  title:"Custom Skills", time:15, tag:"WORKSPACE",
+  sub:"Skills are reusable folders of instructions and know-how you give Claude — so it handles your specific formats, standards, and workflows consistently, every time.",
+  meta:["Reusable across chats","You define the standard","Anthropic ships built-in skills too"],
+  blocks:[
+    {h:"The problem Skills solve", p:"Without a Skill, you re-explain your formatting rules, your house style, or your specific process in every conversation. A Skill packages that knowledge once — Claude reads it automatically when it's relevant and applies it without you repeating yourself."},
+    {h:"What's inside one", list:[
+      "Plain-language instructions describing the task or standard.",
+      "Reference material Claude should follow (templates, examples, constraints).",
+      "Anthropic also ships built-in skills for things like document, spreadsheet, and slide creation, so Claude already follows best practice for those formats."
+    ]}
+  ],
+  spec:[["Format","A folder with an instructions file plus references"],["Best for","Any task you do the same specific way, repeatedly"]],
+  try:"Think of a task you do often with very particular requirements — a report format, a code style, a review checklist — and describe it to Claude as a set of standing rules it should follow every time you ask for that kind of work.",
+  callout:"Skills and Projects solve related but different problems: a Project holds context for one body of work; a Skill packages a repeatable way of doing a task, usable across many contexts.",
+  quiz:{q:"What's the core purpose of a Custom Skill?", opts:["To make Claude respond faster","To package a repeatable standard or workflow so you don't re-explain it each time","To switch which model Claude uses"], correct:1, fb:"Skills exist to encode your specific, repeatable standards once, so Claude applies them consistently without a fresh explanation every time."}
+},
+{
+  title:"Memory & Persistent Context", time:10, tag:"WORKSPACE",
+  sub:"Memory lets Claude carry relevant details from past conversations into new ones — so context builds over time instead of resetting with every chat.",
+  meta:["Cross-conversation","Selective, not total recall","Toggleable"],
+  blocks:[
+    {h:"How it's actually used", p:"Memory is applied selectively — a simple greeting only pulls your name, a technical question matches your known expertise level, and unrelated personal details stay out of contexts where they'd be irrelevant or unwelcome. It's meant to feel like continuity, not surveillance."},
+    {h:"What it isn't", p:"Memory isn't a transcript you can dump wholesale, and it isn't a substitute for a Project when you need guaranteed, complete context — for that, a Project's uploaded files are more reliable than memory's selective recall."}
+  ],
+  spec:[["Where to manage it","Settings → Search and reference past chats / Memory"],["Update it directly","Just tell Claude: \"remember that…\" or \"forget that…\""]],
+  try:"Ask Claude directly: \"what do you remember about me?\" — it will tell you plainly, without guessing or inventing detail.",
+  callout:"You're always in control: you can view, correct, or delete what's remembered, and memory is off entirely in Incognito conversations.",
+  quiz:{q:"You want Claude to stop remembering a specific detail. What do you do?", opts:["Nothing can be done once it's remembered","Tell Claude directly to forget it","Start using a different model"], correct:1, fb:"A direct instruction — \"forget that\" — updates what Claude remembers going forward."}
+},
+{
+  title:"Claude Code", time:15, tag:"BUILD",
+  sub:"Claude Code is an agentic coding tool: describe what you want built or fixed in plain English, and Claude reads your codebase, writes the changes, and runs the commands.",
+  meta:["CLI, desktop, IDE, mobile","Reads & edits real files","For developers"],
+  blocks:[
+    {h:"What makes it 'agentic'", p:"Rather than answering one question at a time, Claude Code plans a task, edits multiple files, runs your build and tests, and iterates on failures — the way a developer would work through a ticket, not the way a chatbot answers a question."},
+    {h:"Where you run it", list:[
+      "Command line, for developers who live in a terminal.",
+      "Desktop app and IDE integrations, for a more visual workflow.",
+      "Remotely from the Claude mobile app, so you can kick off or check on a task away from your desk."
+    ]},
+    {h:"Scaling up: dynamic workflows", p:"For unusually large jobs — a codebase-wide bug hunt, a big migration, a security audit — Claude Code can write its own orchestration script that fans work out across many parallel subagents, each checked before results are merged back. This is triggered explicitly or via an effort setting, and it's built for tasks that would otherwise take a team days or weeks."}
+  ],
+  spec:[["Install via","npm package @anthropic-ai/claude-code"],["Best for","Real repositories, multi-file changes, test-driven fixes"]],
+  try:"If you have a small repo handy, ask Claude Code to add one well-scoped feature or fix one bug end-to-end, including running the tests — and watch it work through the file changes itself.",
+  callout:"Claude Code is a different surface from claude.ai chat — it's built specifically to read, edit, and run real project files, not just talk about code.",
+  quiz:{q:"What best distinguishes Claude Code from a normal Claude chat about code?", opts:["It uses a different, code-only model","It can directly read, edit, and run files in your actual project","It only writes code, never explains it"], correct:1, fb:"The defining trait of Claude Code is direct, agentic action on your real files and commands — not just discussing code in the abstract."}
+},
+{
+  title:"Claude Cowork", time:15, tag:"BUILD",
+  sub:"Cowork brings Claude Code's agentic approach to knowledge work beyond coding — organizing files, drafting reports, and running multi-step tasks on your behalf.",
+  meta:["Files, folders, connected apps","Runs remotely, resumable","Desktop, web, mobile"],
+  blocks:[
+    {h:"Chat vs. Cowork", p:"A regular chat is a conversation — you ask, Claude answers. Cowork is a working session: you describe an outcome, Claude plans it, breaks it into subtasks, and executes — researching, drafting, and organizing in parallel — while you check in and steer whenever you want."},
+    {h:"Typical Cowork tasks", list:[
+      "Organizing a messy folder by type and date.",
+      "Turning a stack of receipts into a formatted expense report.",
+      "Synthesizing research from multiple sources, articles, and notes into one coherent report.",
+      "Working across a long stretch of time — you can close your laptop and it keeps going, then hand you finished output when you return."
+    ]}
+  ],
+  spec:[["Runs on","Anthropic's servers, in an isolated environment"],["Access","Only the folders and tools you explicitly connect"]],
+  try:"Pick a task that's more 'a whole project' than 'a single question' — like organizing a folder or pulling several documents into one report — and hand it to Cowork instead of chat.",
+  callout:"Cowork can only reach the specific folders and tools you connect — it can't wander into anything else on your system.",
+  quiz:{q:"Which task is the better fit for Cowork rather than a standard chat?", opts:["\"What's the capital of France?\"","\"Organize my downloads folder and build a summary report of what's in it\"","\"Rewrite this sentence more concisely\""], correct:1, fb:"Cowork is built for multi-step, file-touching work that unfolds over time — simple single-turn questions are still best in regular chat."}
+},
+{
+  title:"Claude Design", time:10, tag:"BUILD",
+  sub:"Claude Design gives you a visual canvas to collaborate with Claude on real design work — prototypes, decks, and mockups — refined through conversation, not code.",
+  meta:["Anthropic Labs · research preview","Canvas + chat, side by side","Handoff to Claude Code"],
+  blocks:[
+    {h:"How the workflow flows", p:"You describe what you want on the chat side; Claude builds a first version on the canvas. From there you refine through comments, direct edits on the canvas, or adjustment controls Claude generates for that layout — until it's ready."},
+    {h:"What people actually build with it", list:[
+      "Interactive prototypes for user testing, without a code review cycle.",
+      "Wireframes and mockups that hand off cleanly to engineering.",
+      "Pitch decks and one-pagers, exportable to PPTX or Canva.",
+      "When a project is ready to become real software, Claude packages it into a handoff bundle for Claude Code to build from."
+    ]}
+  ],
+  spec:[["Access","claude.ai/design or the Claude Desktop sidebar"],["Plans","Pro, Max, Team, Enterprise (default off for Enterprise)"]],
+  try:"If you have access, describe a simple internal tool or one-pager you need — an approval queue, a settings page, a one-page pitch — and watch Claude build a first draft on the canvas before you refine it.",
+  callout:"Claude Design and Claude Code share the underlying model and a handoff bridge, but they do different jobs — Design is for visual exploration, Code is for building the real, running software.",
+  quiz:{q:"What's the intended next step once a Claude Design prototype is finished?", opts:["It has no further use once exported","It can hand off to Claude Code to become working software","It automatically publishes to the web"], correct:1, fb:"Claude Design is built to flow into Claude Code — idea, prototype, then real implementation."}
+},
+{
+  title:"Workflow Designer", time:15, tag:"BUILD",
+  sub:"Multi-step systems that run themselves: Claude can write its own orchestration script to coordinate many subagents in parallel on one large task — what Anthropic calls dynamic workflows.",
+  meta:["Anthropic feature name: Dynamic Workflows","Lives in: Claude Code","For: large, complex jobs"],
+  blocks:[
+    {h:"The idea", p:"Some jobs are too big for one agent working one step at a time — a bug hunt across an entire codebase, a large migration, a plan that needs to be stress-tested from several angles. Dynamic workflows let Claude plan the whole job, split it into pieces, run pieces in parallel, and verify results against each other before handing you one coordinated answer."},
+    {h:"How it's triggered", list:[
+      "Explicitly — ask Claude to \"use a workflow\" for the task.",
+      "Automatically — an effort setting lets Claude decide on its own when a workflow-based approach fits.",
+      "Progress is saved as it runs, so an interrupted job resumes instead of starting over."
+    ]}
+  ],
+  spec:[["Cost","Uses meaningfully more tokens than a normal session"],["Best for","Codebase-wide audits, large migrations, high-stakes plans worth double-checking"]],
+  try:"For a task that genuinely spans many independent pieces — auditing several files, comparing several options, checking a plan from multiple angles — ask Claude to break it into a workflow rather than handling it in one linear pass.",
+  callout:"Start small: because this consumes more usage than a normal session, Anthropic recommends testing it on a limited-scope task before pointing it at something large.",
+  quiz:{q:"What problem are dynamic workflows specifically built to solve?", opts:["Making single short questions answer faster","Coordinating many parallel pieces of a large, complex task with built-in verification","Reducing token usage on simple tasks"], correct:1, fb:"Dynamic workflows exist for large, decomposable jobs — they trade more usage for the ability to parallelize and cross-check work at scale."}
+},
+{
+  title:"Claude for Small Business", time:15, tag:"APPLY",
+  sub:"Not a single feature, but a way of combining everything so far — Projects, Connectors, file creation, and Cowork — to run the operational side of a small business.",
+  meta:["Applied synthesis lesson","Combines Lessons 3, 5, 6, 11"],
+  blocks:[
+    {h:"Stitching the pieces together", list:[
+      "<b>Projects</b> to hold your business's voice, policies, and standard templates once, reused everywhere.",
+      "<b>Connectors</b> to pull real data — a shared calendar, an inbox, a task tracker — instead of retyping status.",
+      "<b>File creation</b> for the actual deliverables — invoices, proposals, reports — as real, sendable files.",
+      "<b>Cowork</b> for the recurring operational grind — reconciling receipts, organizing client folders, drafting weekly summaries."
+    ]},
+    {h:"Where to start small", p:"Pick the single most repetitive task in your week — invoice formatting, weekly reporting, inbox triage — and build one Project or one Cowork routine around it before trying to automate everything at once."}
+  ],
+  spec:[["Good first win","One recurring admin task, fully handed off"],["Watch for","Sensitive data — keep connector access scoped to what's actually needed"]],
+  try:"Identify the one task that eats the most time in your week that isn't the actual work you're best at. Sketch which combination — Project, Connector, or Cowork — would take it off your plate.",
+  callout:"The leverage here isn't one feature — it's chaining several: a Project for standards, a Connector for live data, Cowork to execute, file creation for the final deliverable.",
+  quiz:{q:"You want Claude to draft a weekly summary using your real calendar and inbox, in your standard format, delivered as a Word doc. Which combination covers this?", opts:["Memory alone","A Project for the format + a Connector for live data + file creation for the doc","Claude Design only"], correct:1, fb:"This is exactly the kind of task that needs several capabilities working together, not any single one in isolation."}
+},
+{
+  title:"Long-Document Mastery", time:15, tag:"APPLY",
+  sub:"Turning 100 pages into the handful of insights that matter — extraction, structured reading, and getting Claude to work with documents too long to just paste into chat.",
+  meta:["Applied synthesis lesson","Formats: PDF, DOCX, XLSX"],
+  blocks:[
+    {h:"Why long documents need a different approach", p:"A 100-page contract or report won't always fit cleanly into one exchange, and pasting raw text loses structure — tables, headings, footnotes. Claude reads uploaded PDFs and Word files directly, preserving that structure, rather than working from a flattened wall of text."},
+    {h:"A reliable pattern for long documents", list:[
+      "Start broad — ask for a structural map: sections, key claims, anything unusual — before diving into detail.",
+      "Ask targeted follow-ups against that map instead of re-reading the whole thing each time.",
+      "For genuinely huge or multi-document research, this is exactly the case for deep research mode (Lesson 4) or a Cowork session (Lesson 11) rather than a single chat."
+    ]}
+  ],
+  spec:[["Supported formats","PDF, DOCX, XLSX, PPTX, and more"],["Rule of thumb","Structure first, detail second"]],
+  try:"Upload the longest document you have on hand and ask Claude first for a one-page map of its structure and key claims — then ask three specific follow-up questions against that map.",
+  callout:"Copyright still applies to long documents: Claude will summarize and analyze in its own words rather than reproducing large verbatim passages, even from your own uploads.",
+  quiz:{q:"What's the recommended first move on a 100-page document, rather than diving straight into detailed questions?", opts:["Ask for a full verbatim transcript","Ask for a structural map of sections and key claims first","Split it into 100 separate one-page chats"], correct:1, fb:"Mapping the structure first gives you a scaffold — every detailed follow-up becomes faster and more precise against that map."}
+}
+];
+
+/* =========================================================
+   STATE + RENDER
+   ========================================================= */
+const state = { current: -1, completed: new Set(), timeLogged: 0 };
+
+function buildNav(){
+  const nav = document.getElementById('lessonNav');
+  LESSONS.forEach((l, i)=>{
+    const row = document.createElement('div');
+    row.className = 'lesson-item';
+    row.id = 'nav-'+i;
+    row.onclick = ()=>goLesson(i);
+    row.innerHTML = `
+      <div class="lesson-num mono">${String(i+1).padStart(2,'0')}</div>
+      <div class="lesson-check" id="chk-${i}"></div>
+      <div class="lesson-info">
+        <div class="lesson-title">${l.title}</div>
+        <div class="lesson-time mono">${l.time} min · ${l.tag}</div>
+      </div>`;
+    nav.appendChild(row);
+  });
+}
+
+function updateGauge(){
+  const total = LESSONS.length;
+  const done = state.completed.size;
+  const pct = Math.round((done/total)*100);
+  const circumference = 276; // 2*PI*44
+  const fillLen = (pct/100) * circumference;
+  document.getElementById('gaugeFill').setAttribute('stroke-dasharray', `${fillLen} ${circumference}`);
+  document.getElementById('gaugeNum').textContent = pct+'%';
+  document.getElementById('doneCount').textContent = done;
+  document.getElementById('timeCount').textContent = state.timeLogged;
+  const fill = document.getElementById('gaugeFill');
+  fill.style.stroke = pct >= 65 ? 'var(--amber)' : 'var(--cyan)';
+}
+
+function renderIntro(){
+  state.current = -1;
+  document.getElementById('topPath').textContent = '00 · Overview';
+  highlightNav(-1);
+  const done = state.completed.size;
+  const totalMin = LESSONS.reduce((s,l)=>s+l.time,0);
+  const html = `
+    <div class="intro-screen">
+      <div class="intro-hero">
+        <div class="eyebrow">FULL CLAUDE COURSE</div>
+        <h2>Go From Chatting<br>With AI — To Running It</h2>
+        <p>Fifteen short modules, each one a single working session. Start anywhere, but the order below builds deliberately: fundamentals, then workspace tools, then agentic builders, then two applied case studies that tie it all together.</p>
+        <button class="btn primary" onclick="goLesson(${done<15?state.completed.size:0})" style="padding:12px 24px;font-size:13px;">
+          ${done>0 ? 'Resume course →' : 'Start Lesson 01 →'}
+        </button>
+      </div>
+
+      <div class="stat-strip">
+        <div class="stat"><div class="n mono">15</div><div class="l">Lessons</div></div>
+        <div class="stat"><div class="n mono">${totalMin}</div><div class="l">Minutes total</div></div>
+        <div class="stat"><div class="n mono">${done}</div><div class="l">Completed</div></div>
+        <div class="stat"><div class="n mono">4</div><div class="l">Course tracks</div></div>
+      </div>
+
+      <div class="block"><h3>Track 01 — Fundamentals</h3></div>
+      <div class="track-list" style="margin-bottom:26px;">
+        ${trackRows(0,2)}
+      </div>
+      <div class="block"><h3>Track 02 — Workspace Tools</h3></div>
+      <div class="track-list" style="margin-bottom:26px;">
+        ${trackRows(2,9)}
+      </div>
+      <div class="block"><h3>Track 03 — Agentic Builders</h3></div>
+      <div class="track-list" style="margin-bottom:26px;">
+        ${trackRows(9,13)}
+      </div>
+      <div class="block"><h3>Track 04 — Applied Case Studies</h3></div>
+      <div class="track-list">
+        ${trackRows(13,15)}
+      </div>
+    </div>`;
+  document.getElementById('content').innerHTML = html;
+  document.getElementById('markBtn').style.display = 'none';
+}
+
+function trackRows(start,end){
+  let out = '';
+  for(let i=start;i<end;i++){
+    const l = LESSONS[i];
+    out += `<div class="track-row" onclick="goLesson(${i})">
+      <div class="tn mono">${String(i+1).padStart(2,'0')}</div>
+      <div class="tt">${l.title} ${state.completed.has(i)?'<span style="color:var(--done);font-size:11px;">✓</span>':''}</div>
+      <div class="td">${l.sub.split('.')[0]}.</div>
+      <div class="tm mono">${l.time}m</div>
+    </div>`;
+  }
+  return out;
+}
+
+function renderLesson(i){
+  state.current = i;
+  const l = LESSONS[i];
+  document.getElementById('topPath').textContent = String(i+1).padStart(2,'0')+' · '+l.title;
+  highlightNav(i);
+  document.getElementById('markBtn').style.display = 'inline-block';
+
+  let blocksHtml = l.blocks.map(b=>`
+    <div class="block">
+      <h3>${b.h}</h3>
+      ${b.p ? `<p>${b.p}</p>` : ''}
+      ${b.list ? `<ul>${b.list.map(li=>`<li>${li}</li>`).join('')}</ul>` : ''}
+    </div>`).join('');
+
+  const specHtml = l.spec ? `
+    <div class="block"><h3>Spec Sheet</h3>
+      <div class="spec-grid">
+        ${l.spec.map(([k,v])=>`<div class="spec-cell"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('')}
+      </div>
+    </div>` : '';
+
+  const tryHtml = l.try ? `
+    <div class="block"><h3>Try It Now</h3>
+      <div class="try-panel">
+        <div class="lbl">Practice prompt</div>
+        <div class="prompt">${l.try}</div>
+      </div>
+    </div>` : '';
+
+  const calloutHtml = l.callout ? `
+    <div class="block">
+      <div class="callout"><div class="lbl">Field Note</div>${l.callout}</div>
+    </div>` : '';
+
+  const quizHtml = l.quiz ? `
+    <div class="block"><h3>Checkpoint</h3>
+      <div class="quiz">
+        <div class="q">${l.quiz.q}</div>
+        <div class="opts">
+          ${l.quiz.opts.map((o,oi)=>`<button class="quiz-opt" onclick="answerQuiz(this, ${oi===l.quiz.correct})">${o}</button>`).join('')}
+        </div>
+        <div class="quiz-feedback" id="quizFb">${l.quiz.fb}</div>
+      </div>
+    </div>` : '';
+
+  const prev = i>0 ? LESSONS[i-1] : null;
+  const next = i<LESSONS.length-1 ? LESSONS[i+1] : null;
+  const footerHtml = `
+    <div class="footer-nav">
+      <div class="side">${prev ? `<div class="lbl">← Previous</div><div class="name" onclick="goLesson(${i-1})">${prev.title}</div>` : `<div class="lbl">Start</div>`}</div>
+      <div class="side right">${next ? `<div class="lbl">Next →</div><div class="name" onclick="goLesson(${i+1})">${next.title}</div>` : `<div class="lbl">Course complete</div><div class="name" onclick="goIntro()">Back to overview</div>`}</div>
+    </div>`;
+
+  document.getElementById('content').innerHTML = `
+    <div class="lesson-header">
+      <div class="tag"><span class="num mono">${String(i+1).padStart(2,'0')}</span> LESSON ${i+1} OF ${LESSONS.length} · ${l.tag}</div>
+      <h2>${l.title}</h2>
+      <p class="sub">${l.sub}</p>
+      <div class="meta-row">
+        <div class="meta-chip"><span class="dot"></span>${l.time} min</div>
+        ${l.meta.map(m=>`<div class="meta-chip"><span class="dot"></span>${m}</div>`).join('')}
+      </div>
+    </div>
+    ${blocksHtml}
+    ${specHtml}
+    ${tryHtml}
+    ${calloutHtml}
+    ${quizHtml}
+    ${footerHtml}
+  `;
+  updateMarkBtn();
+  window.scrollTo({top:0, behavior:'instant'});
+}
+
+function answerQuiz(btn, isCorrect){
+  const opts = btn.parentElement.querySelectorAll('.quiz-opt');
+  opts.forEach(o=>o.onclick=null);
+  opts.forEach(o=>o.style.cursor='default');
+  if(isCorrect){
+    btn.classList.add('correct');
+  } else {
+    btn.classList.add('wrong');
+    const correctBtn = [...opts].find((o,idx)=> idx === LESSONS[state.current].quiz.correct);
+    if(correctBtn) correctBtn.classList.add('correct');
+  }
+  document.getElementById('quizFb').style.display = 'block';
+}
+
+function highlightNav(i){
+  document.querySelectorAll('.lesson-item').forEach(el=>el.classList.remove('active'));
+  if(i>=0) document.getElementById('nav-'+i).classList.add('active');
+}
+
+function goLesson(i){ renderLesson(i); }
+function goIntro(){ renderIntro(); }
+
+function toggleComplete(){
+  const i = state.current;
+  if(i<0) return;
+  const chk = document.getElementById('chk-'+i);
+  if(state.completed.has(i)){
+    state.completed.delete(i);
+    chk.classList.remove('checked');
+    state.timeLogged = Math.max(0, state.timeLogged - LESSONS[i].time);
+  } else {
+    state.completed.add(i);
+    chk.classList.add('checked');
+    state.timeLogged += LESSONS[i].time;
+  }
+  updateGauge();
+  updateMarkBtn();
+}
+
+function updateMarkBtn(){
+  const btn = document.getElementById('markBtn');
+  const i = state.current;
+  if(i<0) return;
+  if(state.completed.has(i)){
+    btn.textContent = '✓ Lesson complete';
+    btn.classList.add('done-state');
+  } else {
+    btn.textContent = 'Mark lesson complete';
+    btn.classList.remove('done-state');
+  }
+}
+
+/* init */
+buildNav();
+updateGauge();
+renderIntro();
+</script>
+</body>
+</html>
